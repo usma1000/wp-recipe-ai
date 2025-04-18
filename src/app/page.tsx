@@ -21,7 +21,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, StopCircle, Copy, Check, Code2 } from "lucide-react";
+import {
+  Loader2,
+  StopCircle,
+  Copy,
+  Check,
+  Code2,
+  Menu,
+  Plus,
+  Clock,
+  Trash2,
+} from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +43,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const formSchema = z.object({
   ingredients: z.string().min(1, "Ingredients are required"),
@@ -44,6 +62,7 @@ const formSchema = z.object({
 
 const STORAGE_KEY = "recipe-form-data";
 const RECIPE_STORAGE_KEY = "generated-recipe";
+const RECIPE_HISTORY_KEY = "recipe-history";
 
 type Recipe = {
   name: string;
@@ -155,15 +174,22 @@ function formatRecipeForWPRM(recipe: Recipe): any {
   };
 }
 
+interface SavedRecipe extends Recipe {
+  id: string;
+  createdAt: string;
+}
+
 export default function RecipeForm() {
   const [isMac, setIsMac] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [recipe, setRecipe] = useState<Recipe | null>(null);
+  const [recipe, setRecipe] = useState<SavedRecipe | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [controller, setController] = useState<AbortController | null>(null);
   const [copied, setCopied] = useState(false);
   const [showJsonDialog, setShowJsonDialog] = useState(false);
+  const [recipeHistory, setRecipeHistory] = useState<SavedRecipe[]>([]);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
     const userAgent = navigator.userAgent;
@@ -214,35 +240,15 @@ export default function RecipeForm() {
     }
   }, [recipe]);
 
-  const handleClear = useCallback(() => {
-    form.reset({
-      ingredients: "",
-      steps: "",
-      tone: "neutral",
-    });
-    setRecipe(null);
-    setError(null);
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(RECIPE_STORAGE_KEY);
-  }, [form]);
-
-  const handleStop = useCallback(() => {
-    if (controller) {
-      controller.abort();
-      setController(null);
-      setIsLoading(false);
+  // Load recipe history on mount
+  useEffect(() => {
+    const savedHistory = localStorage.getItem(RECIPE_HISTORY_KEY);
+    if (savedHistory) {
+      setRecipeHistory(JSON.parse(savedHistory));
     }
-  }, [controller]);
+  }, []);
 
-  const handleCopyJson = useCallback(async () => {
-    if (!recipe) return;
-
-    const wprmJson = formatRecipeForWPRM(recipe);
-    await navigator.clipboard.writeText(JSON.stringify([wprmJson], null, 2));
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [recipe]);
-
+  // Save recipe to history only when newly generated
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     setError(null);
@@ -268,7 +274,20 @@ export default function RecipeForm() {
         return;
       }
 
-      setRecipe(data);
+      // Create new saved recipe with ID and timestamp
+      const newSavedRecipe: SavedRecipe = {
+        ...data,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+      };
+
+      // Update history
+      const updatedHistory = [newSavedRecipe, ...recipeHistory];
+      setRecipeHistory(updatedHistory);
+      localStorage.setItem(RECIPE_HISTORY_KEY, JSON.stringify(updatedHistory));
+
+      // Set as current recipe
+      setRecipe(newSavedRecipe);
     } catch (err) {
       if ((err as Error).name === "AbortError") {
         setError("Generation stopped");
@@ -281,6 +300,58 @@ export default function RecipeForm() {
     }
   }
 
+  const handleClear = useCallback(() => {
+    form.reset({
+      ingredients: "",
+      steps: "",
+      tone: "neutral",
+    });
+    setRecipe(null);
+    setError(null);
+    localStorage.removeItem(STORAGE_KEY);
+  }, [form]);
+
+  const handleStop = useCallback(() => {
+    if (controller) {
+      controller.abort();
+      setController(null);
+      setIsLoading(false);
+    }
+  }, [controller]);
+
+  const handleCopyJson = useCallback(async () => {
+    if (!recipe) return;
+
+    const wprmJson = formatRecipeForWPRM(recipe);
+    await navigator.clipboard.writeText(JSON.stringify([wprmJson], null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [recipe]);
+
+  const loadRecipe = useCallback((savedRecipe: SavedRecipe) => {
+    setRecipe(savedRecipe);
+    setSidebarOpen(false);
+  }, []);
+
+  const deleteRecipe = useCallback(
+    (id: string) => {
+      const updatedHistory = recipeHistory.filter((r) => r.id !== id);
+      setRecipeHistory(updatedHistory);
+      localStorage.setItem(RECIPE_HISTORY_KEY, JSON.stringify(updatedHistory));
+
+      // If current recipe is deleted, clear it
+      if (recipe && "id" in recipe && (recipe as SavedRecipe).id === id) {
+        setRecipe(null);
+      }
+    },
+    [recipeHistory, recipe]
+  );
+
+  const startNewRecipe = useCallback(() => {
+    handleClear();
+    setSidebarOpen(false);
+  }, [handleClear]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !isLoading) {
@@ -292,256 +363,388 @@ export default function RecipeForm() {
   );
 
   return (
-    <div className="min-h-screen py-8 px-4">
-      <div className="container mx-auto max-w-6xl">
-        <h1 className="text-4xl font-bold mb-2 text-center">
-          WP Recipe Generator
-        </h1>
-        <p className="text-muted-foreground mb-8 text-center">
-          Transform your ingredients and steps into a beautifully formatted
-          recipe
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Recipe Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Form {...form}>
-                <form
-                  onSubmit={form.handleSubmit(onSubmit)}
-                  className="space-y-6"
+    <div className="flex h-screen">
+      {/* Sidebar for desktop */}
+      <aside className="hidden md:flex w-80 flex-col border-r bg-muted/40">
+        <div className="p-4 border-b">
+          <Button
+            variant="outline"
+            className="w-full justify-start"
+            onClick={startNewRecipe}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Recipe
+          </Button>
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="p-4 space-y-2">
+            {recipeHistory.map((savedRecipe) => (
+              <div
+                key={savedRecipe.id}
+                className={`p-3 rounded-lg cursor-pointer flex justify-between items-start hover:bg-muted group ${
+                  recipe &&
+                  "id" in recipe &&
+                  (recipe as SavedRecipe).id === savedRecipe.id
+                    ? "bg-muted"
+                    : ""
+                }`}
+                onClick={() => loadRecipe(savedRecipe)}
+              >
+                <div className="space-y-1">
+                  <p className="font-medium line-clamp-1">{savedRecipe.name}</p>
+                  <div className="flex items-center text-xs text-muted-foreground">
+                    <Clock className="mr-1 h-3 w-3" />
+                    {new Date(savedRecipe.createdAt).toLocaleDateString()}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="opacity-0 group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteRecipe(savedRecipe.id);
+                  }}
                 >
-                  <FormField
-                    control={form.control}
-                    name="ingredients"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Ingredients</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Enter your ingredients list..."
-                            className="min-h-[150px] resize-none"
-                            onKeyDown={handleKeyDown}
-                            disabled={isLoading}
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+      </aside>
 
-                  <FormField
-                    control={form.control}
-                    name="steps"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Steps</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Enter your recipe steps..."
-                            className="min-h-[200px] resize-none"
-                            onKeyDown={handleKeyDown}
-                            disabled={isLoading}
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+      {/* Mobile sidebar */}
+      <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+        <SheetTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="md:hidden absolute left-4 top-4"
+          >
+            <Menu className="h-6 w-6" />
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="left" className="w-80 p-0">
+          <SheetHeader className="p-4 border-b">
+            <SheetTitle>Recipe History</SheetTitle>
+          </SheetHeader>
+          <div className="p-4 border-b">
+            <Button
+              variant="outline"
+              className="w-full justify-start"
+              onClick={startNewRecipe}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              New Recipe
+            </Button>
+          </div>
+          <ScrollArea className="flex-1">
+            <div className="p-4 space-y-2">
+              {recipeHistory.map((savedRecipe) => (
+                <div
+                  key={savedRecipe.id}
+                  className={`p-3 rounded-lg cursor-pointer flex justify-between items-start hover:bg-muted group ${
+                    recipe &&
+                    "id" in recipe &&
+                    (recipe as SavedRecipe).id === savedRecipe.id
+                      ? "bg-muted"
+                      : ""
+                  }`}
+                  onClick={() => loadRecipe(savedRecipe)}
+                >
+                  <div className="space-y-1">
+                    <p className="font-medium line-clamp-1">
+                      {savedRecipe.name}
+                    </p>
+                    <div className="flex items-center text-xs text-muted-foreground">
+                      <Clock className="mr-1 h-3 w-3" />
+                      {new Date(savedRecipe.createdAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="opacity-0 group-hover:opacity-100"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteRecipe(savedRecipe.id);
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
 
-                  <FormField
-                    control={form.control}
-                    name="tone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Tone</FormLabel>
-                        <Select
-                          onValueChange={field.onChange}
-                          defaultValue={field.value}
+      {/* Main content */}
+      <div className="flex-1 overflow-auto">
+        <div className="py-8 px-4">
+          <div className="container mx-auto max-w-6xl">
+            <div className="md:ml-0 ml-8">
+              <h1 className="text-4xl font-bold mb-2 text-center">
+                WP Recipe Generator
+              </h1>
+              <p className="text-muted-foreground mb-8 text-center">
+                Transform your ingredients and steps into a beautifully
+                formatted recipe
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="self-start">
+                <CardHeader>
+                  <CardTitle>Recipe Details</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Form {...form}>
+                    <form
+                      onSubmit={form.handleSubmit(onSubmit)}
+                      className="space-y-6"
+                    >
+                      <FormField
+                        control={form.control}
+                        name="ingredients"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Ingredients</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="Enter your ingredients list..."
+                                className="min-h-[150px] resize-none"
+                                onKeyDown={handleKeyDown}
+                                disabled={isLoading}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="steps"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Steps</FormLabel>
+                            <FormControl>
+                              <Textarea
+                                placeholder="Enter your recipe steps..."
+                                className="min-h-[200px] resize-none"
+                                onKeyDown={handleKeyDown}
+                                disabled={isLoading}
+                                {...field}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <FormField
+                        control={form.control}
+                        name="tone"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Tone</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              defaultValue={field.value}
+                              disabled={isLoading}
+                            >
+                              <FormControl>
+                                <SelectTrigger onKeyDown={handleKeyDown}>
+                                  <SelectValue placeholder="Select a tone" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="neutral">Neutral</SelectItem>
+                                <SelectItem value="playful">Playful</SelectItem>
+                                <SelectItem value="friendly">
+                                  Friendly
+                                </SelectItem>
+                                <SelectItem value="concise">Concise</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          type="submit"
+                          className="flex-1"
                           disabled={isLoading}
                         >
-                          <FormControl>
-                            <SelectTrigger onKeyDown={handleKeyDown}>
-                              <SelectValue placeholder="Select a tone" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="neutral">Neutral</SelectItem>
-                            <SelectItem value="playful">Playful</SelectItem>
-                            <SelectItem value="friendly">Friendly</SelectItem>
-                            <SelectItem value="concise">Concise</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      type="submit"
-                      className="flex-1"
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          Generate Recipe
-                          {!isMobile && (
-                            <span className="ml-2 text-sm opacity-70">
-                              {isMac ? "⌘" : "Ctrl"} + Enter
-                            </span>
-                          )}
-                        </>
-                      )}
-                    </Button>
-                    {isLoading ? (
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        onClick={handleStop}
-                        className="px-3"
-                      >
-                        <StopCircle className="h-4 w-4" />
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleClear}
-                        disabled={isLoading}
-                      >
-                        Clear
-                      </Button>
-                    )}
-                  </div>
-                </form>
-              </Form>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-              <CardTitle>Generated Recipe</CardTitle>
-              {recipe && !isLoading && (
-                <Dialog open={showJsonDialog} onOpenChange={setShowJsonDialog}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Code2 className="h-4 w-4 mr-2" />
-                      Export JSON
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-3xl">
-                    <DialogHeader>
-                      <DialogTitle>WP Recipe Maker JSON</DialogTitle>
-                      <DialogDescription>
-                        Click the Copy button to copy the recipe. Then, in WP
-                        Recipe Maker, click the New Recipe button and paste this
-                        JSON into the "Import from JSON" field. You may have to
-                        scroll up to see it.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="relative mt-4 w-full overflow-y-auto">
-                      <div className="absolute right-4 top-4 z-10">
-                        <Button size="sm" onClick={handleCopyJson}>
-                          {copied ? (
+                          {isLoading ? (
                             <>
-                              <Check className="h-4 w-4 mr-2" />
-                              Copied
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Generating...
                             </>
                           ) : (
                             <>
-                              <Copy className="h-4 w-4 mr-2" />
-                              Copy
+                              Generate Recipe
+                              {!isMobile && (
+                                <span className="ml-2 text-sm opacity-70">
+                                  {isMac ? "⌘" : "Ctrl"} + Enter
+                                </span>
+                              )}
                             </>
                           )}
                         </Button>
+                        {isLoading ? (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            onClick={handleStop}
+                            className="px-3"
+                          >
+                            <StopCircle className="h-4 w-4" />
+                          </Button>
+                        ) : (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleClear}
+                            disabled={isLoading}
+                          >
+                            Clear
+                          </Button>
+                        )}
                       </div>
-                      <div className="rounded-lg border bg-muted max-h-[60vh] overflow-y-auto">
-                        <pre className="p-4 text-sm overflow-auto">
-                          <code className="block">
-                            {JSON.stringify(
-                              [formatRecipeForWPRM(recipe)],
-                              null,
-                              2
-                            )}
-                          </code>
-                        </pre>
+                    </form>
+                  </Form>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+                  <CardTitle>Generated Recipe</CardTitle>
+                  {recipe && !isLoading && (
+                    <Dialog
+                      open={showJsonDialog}
+                      onOpenChange={setShowJsonDialog}
+                    >
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Code2 className="h-4 w-4 mr-2" />
+                          Export JSON
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-3xl">
+                        <DialogHeader>
+                          <DialogTitle>WP Recipe Maker JSON</DialogTitle>
+                          <DialogDescription>
+                            Click the Copy button to copy the recipe. Then, in
+                            WP Recipe Maker, click the New Recipe button and
+                            paste this JSON into the "Import from JSON" field.
+                            You may have to scroll up to see it.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="relative mt-4 w-full overflow-y-auto">
+                          <div className="absolute right-4 top-4 z-10">
+                            <Button size="sm" onClick={handleCopyJson}>
+                              {copied ? (
+                                <>
+                                  <Check className="h-4 w-4 mr-2" />
+                                  Copied
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-4 w-4 mr-2" />
+                                  Copy
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                          <div className="rounded-lg border bg-muted max-h-[60vh] overflow-y-auto">
+                            <pre className="p-4 text-sm overflow-auto">
+                              <code className="block">
+                                {JSON.stringify(
+                                  [formatRecipeForWPRM(recipe)],
+                                  null,
+                                  2
+                                )}
+                              </code>
+                            </pre>
+                          </div>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {error && (
+                    <div className="text-destructive mb-4 p-4 rounded-lg bg-destructive/10">
+                      {error}
+                    </div>
+                  )}
+                  {isLoading && <LoadingRecipe />}
+                  {recipe && !isLoading && (
+                    <div className="space-y-6">
+                      <div>
+                        <h2 className="text-2xl font-bold">{recipe.name}</h2>
+                        <Separator className="my-4" />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-4 text-sm">
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Servings</p>
+                          <p className="font-medium">{recipe.servings}</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Prep Time</p>
+                          <p className="font-medium">{recipe.prepTime} mins</p>
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-muted-foreground">Cook Time</p>
+                          <p className="font-medium">{recipe.cookTime} mins</p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="font-semibold text-lg mb-3">
+                          Ingredients
+                        </h3>
+                        <ul className="list-disc pl-5 space-y-2 marker:text-primary">
+                          {recipe.ingredients.map((ingredient, i) => (
+                            <li key={i} className="pl-2">
+                              {ingredient}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <Separator />
+
+                      <div>
+                        <h3 className="font-semibold text-lg mb-3">
+                          Instructions
+                        </h3>
+                        <ol className="list-decimal pl-5 space-y-3">
+                          {recipe.instructions.map((instruction, i) => (
+                            <li key={i} className="pl-2">
+                              {instruction}
+                            </li>
+                          ))}
+                        </ol>
                       </div>
                     </div>
-                  </DialogContent>
-                </Dialog>
-              )}
-            </CardHeader>
-            <CardContent>
-              {error && (
-                <div className="text-destructive mb-4 p-4 rounded-lg bg-destructive/10">
-                  {error}
-                </div>
-              )}
-              {isLoading && <LoadingRecipe />}
-              {recipe && !isLoading && (
-                <div className="space-y-6">
-                  <div>
-                    <h2 className="text-2xl font-bold">{recipe.name}</h2>
-                    <Separator className="my-4" />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Servings</p>
-                      <p className="font-medium">{recipe.servings}</p>
+                  )}
+                  {!recipe && !error && !isLoading && (
+                    <div className="text-center text-muted-foreground py-8">
+                      Your generated recipe will appear here
                     </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Prep Time</p>
-                      <p className="font-medium">{recipe.prepTime} mins</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-muted-foreground">Cook Time</p>
-                      <p className="font-medium">{recipe.cookTime} mins</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h3 className="font-semibold text-lg mb-3">Ingredients</h3>
-                    <ul className="list-disc pl-5 space-y-2 marker:text-primary">
-                      {recipe.ingredients.map((ingredient, i) => (
-                        <li key={i} className="pl-2">
-                          {ingredient}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <Separator />
-
-                  <div>
-                    <h3 className="font-semibold text-lg mb-3">Instructions</h3>
-                    <ol className="list-decimal pl-5 space-y-3">
-                      {recipe.instructions.map((instruction, i) => (
-                        <li key={i} className="pl-2">
-                          {instruction}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                </div>
-              )}
-              {!recipe && !error && !isLoading && (
-                <div className="text-center text-muted-foreground py-8">
-                  Your generated recipe will appear here
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </div>
     </div>
