@@ -328,10 +328,20 @@ export default function RecipeForm() {
     setTimeout(() => setCopied(false), 2000);
   }, [recipe]);
 
-  const loadRecipe = useCallback((savedRecipe: SavedRecipe) => {
-    setRecipe(savedRecipe);
-    setSidebarOpen(false);
-  }, []);
+  const loadRecipe = useCallback(
+    (savedRecipe: SavedRecipe) => {
+      setRecipe(savedRecipe);
+      setSidebarOpen(false);
+
+      // Update form with the loaded recipe's data
+      form.reset({
+        ingredients: savedRecipe.ingredients.join("\n"),
+        steps: savedRecipe.instructions.join("\n"),
+        tone: form.getValues("tone"), // Keep the current tone
+      });
+    },
+    [form]
+  );
 
   const deleteRecipe = useCallback(
     (id: string) => {
