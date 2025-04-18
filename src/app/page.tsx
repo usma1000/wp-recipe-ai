@@ -82,6 +82,65 @@ interface Recipe {
   instructions: string[];
 }
 
+interface SavedRecipe extends Recipe {
+  id: string;
+  createdAt: string;
+}
+
+interface WPRMIngredient {
+  amount: string;
+  unit: string;
+  name: string;
+  notes: string;
+  type: "ingredient";
+}
+
+interface WPRMInstruction {
+  text: string;
+  type: "instruction";
+  image_url: string;
+}
+
+interface WPRMNutrition {
+  calories: number;
+  carbohydrates: number;
+  protein: number;
+  fat: number;
+  saturated_fat: number;
+  cholesterol: number;
+  sodium: number;
+  potassium: number;
+  fiber: number;
+  sugar: number;
+  vitamin_a: number;
+  vitamin_c: number;
+  calcium: number;
+  iron: number;
+}
+
+interface WPRMRecipe {
+  type: "food";
+  name: string;
+  summary: string;
+  author_display: "disabled";
+  servings: string;
+  servings_unit: "servings";
+  prep_time: string;
+  cook_time: string;
+  total_time: string;
+  tags: {
+    course: string[];
+    cuisine: string[];
+    keyword: string[];
+    difficulty: string[];
+  };
+  equipment: string[];
+  ingredients_flat: WPRMIngredient[];
+  instructions_flat: WPRMInstruction[];
+  notes: string;
+  nutrition: WPRMNutrition;
+}
+
 function LoadingRecipe() {
   return (
     <div className="space-y-6">
@@ -131,7 +190,7 @@ function LoadingRecipe() {
   );
 }
 
-function formatRecipeForWPRM(recipe: Recipe): any {
+function formatRecipeForWPRM(recipe: Recipe): WPRMRecipe {
   return {
     type: "food",
     name: recipe.name,
@@ -181,11 +240,6 @@ function formatRecipeForWPRM(recipe: Recipe): any {
       iron: 0,
     },
   };
-}
-
-interface SavedRecipe extends Recipe {
-  id: string;
-  createdAt: string;
 }
 
 export default function RecipeForm() {
