@@ -32,6 +32,8 @@ import {
   Plus,
   Clock,
   Trash2,
+  PanelLeftClose,
+  PanelLeft,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -52,6 +54,11 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 
 const formSchema = z.object({
   ingredients: z.string().min(1, "Ingredients are required"),
@@ -192,6 +199,7 @@ export default function RecipeForm() {
   const [showJsonDialog, setShowJsonDialog] = useState(false);
   const [recipeHistory, setRecipeHistory] = useState<SavedRecipe[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const userAgent = navigator.userAgent;
@@ -376,55 +384,93 @@ export default function RecipeForm() {
 
   return (
     <div className="flex h-screen">
-      {/* Sidebar for desktop */}
-      <aside className="hidden md:flex w-80 flex-col border-r bg-muted/40">
-        <div className="p-4 border-b">
-          <Button
-            variant="outline"
-            className="w-full justify-start"
-            onClick={startNewRecipe}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            New Recipe
-          </Button>
-        </div>
-        <ScrollArea className="flex-1">
-          <div className="p-4 space-y-2">
-            {recipeHistory.map((savedRecipe) => (
-              <div
-                key={savedRecipe.id}
-                className={`p-3 rounded-lg cursor-pointer flex justify-between items-start hover:bg-muted group ${
-                  recipe &&
-                  "id" in recipe &&
-                  (recipe as SavedRecipe).id === savedRecipe.id
-                    ? "bg-muted"
-                    : ""
-                }`}
-                onClick={() => loadRecipe(savedRecipe)}
+      {/* Desktop sidebar */}
+      <Collapsible
+        open={!sidebarCollapsed}
+        onOpenChange={(open) => setSidebarCollapsed(!open)}
+        className="relative hidden md:block h-screen"
+      >
+        <div
+          className={`h-full flex flex-col border-r bg-muted/40 transition-all duration-300 ${
+            sidebarCollapsed ? "w-[50px]" : "w-80"
+          }`}
+        >
+          <div className="flex flex-col gap-2 p-2 border-b">
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`shrink-0 w-8 h-8 p-0 transition-transform duration-200`}
               >
-                <div className="space-y-1">
-                  <p className="font-medium line-clamp-1">{savedRecipe.name}</p>
-                  <div className="flex items-center text-xs text-muted-foreground">
-                    <Clock className="mr-1 h-3 w-3" />
-                    {new Date(savedRecipe.createdAt).toLocaleDateString()}
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="opacity-0 group-hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteRecipe(savedRecipe.id);
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
+                {sidebarCollapsed ? (
+                  <PanelLeft className="h-4 w-4" />
+                ) : (
+                  <PanelLeftClose className="h-4 w-4" />
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            {!sidebarCollapsed ? (
+              <Button
+                variant="default"
+                className="w-full justify-start"
+                onClick={startNewRecipe}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                New Recipe
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-8 h-8 p-0"
+                onClick={startNewRecipe}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            )}
           </div>
-        </ScrollArea>
-      </aside>
+          <CollapsibleContent forceMount className="flex-1">
+            <div className={`${sidebarCollapsed ? "hidden" : "block"}`}>
+              <ScrollArea className="flex-1 h-[calc(100vh-5rem)]">
+                <div className="p-4 space-y-2">
+                  {recipeHistory.map((savedRecipe) => (
+                    <div
+                      key={savedRecipe.id}
+                      className={`p-3 rounded-lg cursor-pointer flex justify-between items-start hover:bg-muted group ${
+                        recipe && "id" in recipe && recipe.id === savedRecipe.id
+                          ? "bg-muted"
+                          : ""
+                      }`}
+                      onClick={() => loadRecipe(savedRecipe)}
+                    >
+                      <div className="space-y-1">
+                        <p className="font-medium line-clamp-1">
+                          {savedRecipe.name}
+                        </p>
+                        <div className="flex items-center text-xs text-muted-foreground">
+                          <Clock className="mr-1 h-3 w-3" />
+                          {new Date(savedRecipe.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="opacity-0 group-hover:opacity-100"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteRecipe(savedRecipe.id);
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
 
       {/* Mobile sidebar */}
       <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
@@ -443,7 +489,7 @@ export default function RecipeForm() {
           </SheetHeader>
           <div className="p-4 border-b">
             <Button
-              variant="outline"
+              variant="default"
               className="w-full justify-start"
               onClick={startNewRecipe}
             >
