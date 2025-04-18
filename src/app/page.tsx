@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCallback, useEffect, useState } from "react";
+import { Loader2, StopCircle } from "lucide-react";
 
 const formSchema = z.object({
   ingredients: z.string().min(1, "Ingredients are required"),
@@ -29,6 +30,8 @@ const formSchema = z.object({
     required_error: "Please select a tone",
   }),
 });
+
+const STORAGE_KEY = "recipe-form-data";
 
 type Recipe = {
   name: string;
@@ -45,6 +48,7 @@ export default function RecipeForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [controller, setController] = useState<AbortController | null>(null);
 
   useEffect(() => {
     const userAgent = navigator.userAgent;
@@ -59,13 +63,54 @@ export default function RecipeForm() {
     defaultValues: {
       ingredients: "",
       steps: "",
-      tone: "",
+      tone: "neutral", // Set default tone
     },
   });
+
+  // Load saved form data on mount
+  useEffect(() => {
+    const savedData = localStorage.getItem(STORAGE_KEY);
+    if (savedData) {
+      const parsedData = JSON.parse(savedData);
+      form.reset(parsedData);
+    }
+  }, [form]);
+
+  // Save form data on change
+  useEffect(() => {
+    const subscription = form.watch((data) => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  const handleClear = useCallback(() => {
+    form.reset({
+      ingredients: "",
+      steps: "",
+      tone: "neutral",
+    });
+    setRecipe(null);
+    setError(null);
+    localStorage.removeItem(STORAGE_KEY);
+  }, [form]);
+
+  const handleStop = useCallback(() => {
+    if (controller) {
+      controller.abort();
+      setController(null);
+      setIsLoading(false);
+    }
+  }, [controller]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
     setError(null);
+
+    // Create new abort controller
+    const abortController = new AbortController();
+    setController(abortController);
+
     try {
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -73,6 +118,7 @@ export default function RecipeForm() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(values),
+        signal: abortController.signal,
       });
 
       const data = await response.json();
@@ -84,20 +130,25 @@ export default function RecipeForm() {
 
       setRecipe(data);
     } catch (err) {
-      setError("Failed to generate recipe. Please try again.");
+      if ((err as Error).name === "AbortError") {
+        setError("Generation stopped");
+      } else {
+        setError("Failed to generate recipe. Please try again.");
+      }
     } finally {
       setIsLoading(false);
+      setController(null);
     }
   }
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !isLoading) {
         e.preventDefault();
         form.handleSubmit(onSubmit)();
       }
     },
-    [form]
+    [form, isLoading]
   );
 
   return (
@@ -118,6 +169,7 @@ export default function RecipeForm() {
                       placeholder="Enter your ingredients list..."
                       className="min-h-[150px]"
                       onKeyDown={handleKeyDown}
+                      disabled={isLoading}
                       {...field}
                     />
                   </FormControl>
@@ -137,6 +189,7 @@ export default function RecipeForm() {
                       placeholder="Enter your recipe steps..."
                       className="min-h-[200px]"
                       onKeyDown={handleKeyDown}
+                      disabled={isLoading}
                       {...field}
                     />
                   </FormControl>
@@ -154,6 +207,7 @@ export default function RecipeForm() {
                   <Select
                     onValueChange={field.onChange}
                     defaultValue={field.value}
+                    disabled={isLoading}
                   >
                     <FormControl>
                       <SelectTrigger onKeyDown={handleKeyDown}>
@@ -172,14 +226,43 @@ export default function RecipeForm() {
               )}
             />
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Generating..." : "Generate Recipe"}
-              {!isMobile && (
-                <span className="ml-2 text-sm opacity-70">
-                  {isMac ? "⌘" : "Ctrl"} + Enter
-                </span>
+            <div className="flex gap-2">
+              <Button type="submit" className="flex-1" disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    Generate Recipe
+                    {!isMobile && (
+                      <span className="ml-2 text-sm opacity-70">
+                        {isMac ? "⌘" : "Ctrl"} + Enter
+                      </span>
+                    )}
+                  </>
+                )}
+              </Button>
+              {isLoading ? (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleStop}
+                >
+                  <StopCircle className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleClear}
+                  disabled={isLoading}
+                >
+                  Clear
+                </Button>
               )}
-            </Button>
+            </div>
           </form>
         </Form>
       </div>
