@@ -21,10 +21,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, StopCircle } from "lucide-react";
+import { Loader2, StopCircle, Copy, Check, Code2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const formSchema = z.object({
   ingredients: z.string().min(1, "Ingredients are required"),
@@ -35,6 +43,7 @@ const formSchema = z.object({
 });
 
 const STORAGE_KEY = "recipe-form-data";
+const RECIPE_STORAGE_KEY = "generated-recipe";
 
 type Recipe = {
   name: string;
@@ -94,6 +103,58 @@ function LoadingRecipe() {
   );
 }
 
+function formatRecipeForWPRM(recipe: Recipe): any {
+  return {
+    type: "food",
+    name: recipe.name,
+    summary: "",
+    author_display: "disabled",
+    servings: recipe.servings,
+    servings_unit: "servings",
+    prep_time: recipe.prepTime,
+    cook_time: recipe.cookTime,
+    total_time: (
+      parseInt(recipe.prepTime) + parseInt(recipe.cookTime)
+    ).toString(),
+    tags: {
+      course: [],
+      cuisine: [],
+      keyword: [],
+      difficulty: [],
+    },
+    equipment: [],
+    ingredients_flat: recipe.ingredients.map((ingredient) => ({
+      amount: "",
+      unit: "",
+      name: ingredient,
+      notes: "",
+      type: "ingredient",
+    })),
+    instructions_flat: recipe.instructions.map((instruction) => ({
+      text: instruction,
+      type: "instruction",
+      image_url: "",
+    })),
+    notes: "",
+    nutrition: {
+      calories: 0,
+      carbohydrates: 0,
+      protein: 0,
+      fat: 0,
+      saturated_fat: 0,
+      cholesterol: 0,
+      sodium: 0,
+      potassium: 0,
+      fiber: 0,
+      sugar: 0,
+      vitamin_a: 0,
+      vitamin_c: 0,
+      calcium: 0,
+      iron: 0,
+    },
+  };
+}
+
 export default function RecipeForm() {
   const [isMac, setIsMac] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -101,6 +162,8 @@ export default function RecipeForm() {
   const [recipe, setRecipe] = useState<Recipe | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [controller, setController] = useState<AbortController | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [showJsonDialog, setShowJsonDialog] = useState(false);
 
   useEffect(() => {
     const userAgent = navigator.userAgent;
@@ -136,6 +199,21 @@ export default function RecipeForm() {
     return () => subscription.unsubscribe();
   }, [form]);
 
+  // Load saved recipe on mount
+  useEffect(() => {
+    const savedRecipe = localStorage.getItem(RECIPE_STORAGE_KEY);
+    if (savedRecipe) {
+      setRecipe(JSON.parse(savedRecipe));
+    }
+  }, []);
+
+  // Save recipe when it changes
+  useEffect(() => {
+    if (recipe) {
+      localStorage.setItem(RECIPE_STORAGE_KEY, JSON.stringify(recipe));
+    }
+  }, [recipe]);
+
   const handleClear = useCallback(() => {
     form.reset({
       ingredients: "",
@@ -145,6 +223,7 @@ export default function RecipeForm() {
     setRecipe(null);
     setError(null);
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(RECIPE_STORAGE_KEY);
   }, [form]);
 
   const handleStop = useCallback(() => {
@@ -154,6 +233,15 @@ export default function RecipeForm() {
       setIsLoading(false);
     }
   }, [controller]);
+
+  const handleCopyJson = useCallback(async () => {
+    if (!recipe) return;
+
+    const wprmJson = formatRecipeForWPRM(recipe);
+    await navigator.clipboard.writeText(JSON.stringify([wprmJson], null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [recipe]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
@@ -341,8 +429,57 @@ export default function RecipeForm() {
           </Card>
 
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
               <CardTitle>Generated Recipe</CardTitle>
+              {recipe && !isLoading && (
+                <Dialog open={showJsonDialog} onOpenChange={setShowJsonDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Code2 className="h-4 w-4 mr-2" />
+                      Export JSON
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                      <DialogTitle>WP Recipe Maker JSON</DialogTitle>
+                      <DialogDescription>
+                        Click the Copy button to copy the recipe. Then, in WP
+                        Recipe Maker, click the New Recipe button and paste this
+                        JSON into the "Import from JSON" field. You may have to
+                        scroll up to see it.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="relative mt-4 w-full overflow-y-auto">
+                      <div className="absolute right-4 top-4 z-10">
+                        <Button size="sm" onClick={handleCopyJson}>
+                          {copied ? (
+                            <>
+                              <Check className="h-4 w-4 mr-2" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                      <div className="rounded-lg border bg-muted max-h-[60vh] overflow-y-auto">
+                        <pre className="p-4 text-sm overflow-auto">
+                          <code className="block">
+                            {JSON.stringify(
+                              [formatRecipeForWPRM(recipe)],
+                              null,
+                              2
+                            )}
+                          </code>
+                        </pre>
+                      </div>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              )}
             </CardHeader>
             <CardContent>
               {error && (
