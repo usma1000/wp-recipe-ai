@@ -22,6 +22,9 @@ import {
 } from "@/components/ui/select";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, StopCircle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 
 const formSchema = z.object({
   ingredients: z.string().min(1, "Ingredients are required"),
@@ -41,6 +44,55 @@ type Recipe = {
   ingredients: string[];
   instructions: string[];
 };
+
+function LoadingRecipe() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <Skeleton className="h-8 w-3/4" />
+        <Separator className="my-4" />
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-12" />
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-12" />
+        </div>
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-4 w-12" />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <Skeleton className="h-6 w-24" />
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-4 w-full" />
+          ))}
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <Skeleton className="h-6 w-24" />
+        <div className="space-y-3">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="flex gap-2">
+              <Skeleton className="h-4 w-4 mt-1" />
+              <Skeleton className="h-4 flex-1" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function RecipeForm() {
   const [isMac, setIsMac] = useState(false);
@@ -152,163 +204,208 @@ export default function RecipeForm() {
   );
 
   return (
-    <div className="container mx-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-6">WP Recipe Generator</h1>
+    <div className="min-h-screen py-8 px-4">
+      <div className="container mx-auto max-w-6xl">
+        <h1 className="text-4xl font-bold mb-2 text-center">
+          WP Recipe Generator
+        </h1>
+        <p className="text-muted-foreground mb-8 text-center">
+          Transform your ingredients and steps into a beautifully formatted
+          recipe
+        </p>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-            <FormField
-              control={form.control}
-              name="ingredients"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Ingredients</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Enter your ingredients list..."
-                      className="min-h-[150px]"
-                      onKeyDown={handleKeyDown}
-                      disabled={isLoading}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="steps"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Steps</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Enter your recipe steps..."
-                      className="min-h-[200px]"
-                      onKeyDown={handleKeyDown}
-                      disabled={isLoading}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="tone"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Tone</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                    disabled={isLoading}
-                  >
-                    <FormControl>
-                      <SelectTrigger onKeyDown={handleKeyDown}>
-                        <SelectValue placeholder="Select a tone" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="neutral">Neutral</SelectItem>
-                      <SelectItem value="playful">Playful</SelectItem>
-                      <SelectItem value="friendly">Friendly</SelectItem>
-                      <SelectItem value="concise">Concise</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="flex gap-2">
-              <Button type="submit" className="flex-1" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    Generate Recipe
-                    {!isMobile && (
-                      <span className="ml-2 text-sm opacity-70">
-                        {isMac ? "⌘" : "Ctrl"} + Enter
-                      </span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Recipe Details</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Form {...form}>
+                <form
+                  onSubmit={form.handleSubmit(onSubmit)}
+                  className="space-y-6"
+                >
+                  <FormField
+                    control={form.control}
+                    name="ingredients"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ingredients</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Enter your ingredients list..."
+                            className="min-h-[150px] resize-none"
+                            onKeyDown={handleKeyDown}
+                            disabled={isLoading}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </>
-                )}
-              </Button>
-              {isLoading ? (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={handleStop}
-                >
-                  <StopCircle className="h-4 w-4" />
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleClear}
-                  disabled={isLoading}
-                >
-                  Clear
-                </Button>
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="steps"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Steps</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Enter your recipe steps..."
+                            className="min-h-[200px] resize-none"
+                            onKeyDown={handleKeyDown}
+                            disabled={isLoading}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="tone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Tone</FormLabel>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                          disabled={isLoading}
+                        >
+                          <FormControl>
+                            <SelectTrigger onKeyDown={handleKeyDown}>
+                              <SelectValue placeholder="Select a tone" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="neutral">Neutral</SelectItem>
+                            <SelectItem value="playful">Playful</SelectItem>
+                            <SelectItem value="friendly">Friendly</SelectItem>
+                            <SelectItem value="concise">Concise</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex gap-2 pt-2">
+                    <Button
+                      type="submit"
+                      className="flex-1"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          Generate Recipe
+                          {!isMobile && (
+                            <span className="ml-2 text-sm opacity-70">
+                              {isMac ? "⌘" : "Ctrl"} + Enter
+                            </span>
+                          )}
+                        </>
+                      )}
+                    </Button>
+                    {isLoading ? (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        onClick={handleStop}
+                        className="px-3"
+                      >
+                        <StopCircle className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleClear}
+                        disabled={isLoading}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                </form>
+              </Form>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Generated Recipe</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {error && (
+                <div className="text-destructive mb-4 p-4 rounded-lg bg-destructive/10">
+                  {error}
+                </div>
               )}
-            </div>
-          </form>
-        </Form>
-      </div>
+              {isLoading && <LoadingRecipe />}
+              {recipe && !isLoading && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-2xl font-bold">{recipe.name}</h2>
+                    <Separator className="my-4" />
+                  </div>
 
-      <div className="border rounded-lg p-6">
-        {error && <div className="text-red-500 mb-4">{error}</div>}
-        {recipe && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">{recipe.name}</h2>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Servings</p>
+                      <p className="font-medium">{recipe.servings}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Prep Time</p>
+                      <p className="font-medium">{recipe.prepTime} mins</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-muted-foreground">Cook Time</p>
+                      <p className="font-medium">{recipe.cookTime} mins</p>
+                    </div>
+                  </div>
 
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <strong>Servings:</strong> {recipe.servings}
-              </div>
-              <div>
-                <strong>Prep Time:</strong> {recipe.prepTime} mins
-              </div>
-              <div>
-                <strong>Cook Time:</strong> {recipe.cookTime} mins
-              </div>
-            </div>
+                  <div>
+                    <h3 className="font-semibold text-lg mb-3">Ingredients</h3>
+                    <ul className="list-disc pl-5 space-y-2 marker:text-primary">
+                      {recipe.ingredients.map((ingredient, i) => (
+                        <li key={i} className="pl-2">
+                          {ingredient}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
 
-            <div>
-              <h3 className="font-bold mb-2">Ingredients:</h3>
-              <ul className="list-disc pl-5 space-y-1">
-                {recipe.ingredients.map((ingredient, i) => (
-                  <li key={i}>{ingredient}</li>
-                ))}
-              </ul>
-            </div>
+                  <Separator />
 
-            <div>
-              <h3 className="font-bold mb-2">Instructions:</h3>
-              <ol className="list-decimal pl-5 space-y-2">
-                {recipe.instructions.map((instruction, i) => (
-                  <li key={i}>{instruction}</li>
-                ))}
-              </ol>
-            </div>
-          </div>
-        )}
-        {!recipe && !error && !isLoading && (
-          <div className="text-center text-gray-500">
-            Generated recipe will appear here
-          </div>
-        )}
+                  <div>
+                    <h3 className="font-semibold text-lg mb-3">Instructions</h3>
+                    <ol className="list-decimal pl-5 space-y-3">
+                      {recipe.instructions.map((instruction, i) => (
+                        <li key={i} className="pl-2">
+                          {instruction}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                </div>
+              )}
+              {!recipe && !error && !isLoading && (
+                <div className="text-center text-muted-foreground py-8">
+                  Your generated recipe will appear here
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
