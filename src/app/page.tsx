@@ -756,9 +756,10 @@ export default function RecipeForm() {
                           <DialogTitle>WP Recipe Maker JSON</DialogTitle>
                           <DialogDescription>
                             Click the Copy button to copy the recipe. Then, in
-                            WP Recipe Maker, click the New Recipe button and
-                            paste this JSON into the "Import from JSON" field.
-                            You may have to scroll up to see it.
+                            WP Recipe Maker, click the &ldquo;New Recipe&rdquo;
+                            button and paste this JSON into the &ldquo;Import
+                            from JSON&rdquo; field. You may have to scroll up to
+                            see it.
                           </DialogDescription>
                         </DialogHeader>
                         <div className="relative mt-4 w-full overflow-y-auto">
