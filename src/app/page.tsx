@@ -19,6 +19,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  SelectSeparator,
 } from "@/components/ui/select";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -64,14 +65,15 @@ const STORAGE_KEY = "recipe-form-data";
 const RECIPE_STORAGE_KEY = "generated-recipe";
 const RECIPE_HISTORY_KEY = "recipe-history";
 
-type Recipe = {
+interface Recipe {
   name: string;
+  titleVariations: string[];
   servings: string;
   prepTime: string;
   cookTime: string;
   ingredients: string[];
   instructions: string[];
-};
+}
 
 function LoadingRecipe() {
   return (
@@ -524,7 +526,7 @@ export default function RecipeForm() {
                             <FormControl>
                               <Textarea
                                 placeholder="Enter your ingredients list..."
-                                className="min-h-[150px] resize-none"
+                                className="min-h-[150px] resize-none border-gray-400"
                                 onKeyDown={handleKeyDown}
                                 disabled={isLoading}
                                 {...field}
@@ -544,7 +546,7 @@ export default function RecipeForm() {
                             <FormControl>
                               <Textarea
                                 placeholder="Enter your recipe steps..."
-                                className="min-h-[200px] resize-none"
+                                className="min-h-[200px] resize-none border-gray-400"
                                 onKeyDown={handleKeyDown}
                                 disabled={isLoading}
                                 {...field}
@@ -567,7 +569,10 @@ export default function RecipeForm() {
                               disabled={isLoading}
                             >
                               <FormControl>
-                                <SelectTrigger onKeyDown={handleKeyDown}>
+                                <SelectTrigger
+                                  onKeyDown={handleKeyDown}
+                                  className="border-gray-400"
+                                >
                                   <SelectValue placeholder="Select a tone" />
                                 </SelectTrigger>
                               </FormControl>
@@ -601,7 +606,7 @@ export default function RecipeForm() {
                               Generate Recipe
                               {!isMobile && (
                                 <span className="ml-2 text-sm opacity-70">
-                                  {isMac ? "⌘" : "Ctrl"} + Enter
+                                  ({isMac ? "⌘" : "Ctrl"} + Enter)
                                 </span>
                               )}
                             </>
@@ -698,7 +703,54 @@ export default function RecipeForm() {
                   {recipe && !isLoading && (
                     <div className="space-y-6">
                       <div>
-                        <h2 className="text-2xl font-bold">{recipe.name}</h2>
+                        <Select
+                          value={recipe.name}
+                          onValueChange={(value) => {
+                            const updatedRecipe = {
+                              ...recipe,
+                              name: value,
+                            };
+                            setRecipe(updatedRecipe);
+
+                            // Update the recipe in history
+                            const updatedHistory = recipeHistory.map((r) =>
+                              r.id === recipe.id ? { ...r, name: value } : r
+                            );
+                            setRecipeHistory(updatedHistory);
+                            localStorage.setItem(
+                              RECIPE_HISTORY_KEY,
+                              JSON.stringify(updatedHistory)
+                            );
+                          }}
+                        >
+                          <SelectTrigger className="text-2xl font-bold min-h-[3rem] !h-auto py-2 bg-muted/70 hover:bg-muted transition-colors [&>span]:whitespace-normal data-[size=default]:!h-auto text-left justify-start w-full border border-muted-foreground/20">
+                            <SelectValue placeholder="Select a title" />
+                          </SelectTrigger>
+                          <SelectContent className="max-w-[calc(100vw-4rem)] md:max-w-[600px]">
+                            <SelectItem
+                              value={recipe.name}
+                              className="whitespace-normal"
+                            >
+                              {recipe.name}
+                            </SelectItem>
+                            {recipe.titleVariations?.length > 0 && (
+                              <>
+                                <SelectSeparator />
+                                {recipe.titleVariations
+                                  .filter((title) => title !== recipe.name)
+                                  .map((title, i) => (
+                                    <SelectItem
+                                      key={i}
+                                      value={title}
+                                      className="whitespace-normal"
+                                    >
+                                      {title}
+                                    </SelectItem>
+                                  ))}
+                              </>
+                            )}
+                          </SelectContent>
+                        </Select>
                         <Separator className="my-4" />
                       </div>
 
