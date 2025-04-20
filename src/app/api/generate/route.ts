@@ -1,11 +1,88 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+const MAX_REQUESTS_PER_IP = 20; // Maximum requests per IP per hour
+const MAX_TOKENS = 30000; // Maximum tokens per request to prevent very large generations
+
+// Store IP addresses and their request counts
+const ipRequests = new Map<string, { count: number; timestamp: number }>();
+
+// Clean up old entries every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of ipRequests.entries()) {
+    if (now - data.timestamp > RATE_LIMIT_WINDOW) {
+      ipRequests.delete(ip);
+    }
+  }
+}, RATE_LIMIT_WINDOW);
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const requestData = ipRequests.get(ip);
+
+  if (!requestData) {
+    // First request from this IP
+    ipRequests.set(ip, { count: 1, timestamp: now });
+    return false;
+  }
+
+  if (now - requestData.timestamp > RATE_LIMIT_WINDOW) {
+    // Reset counter if window has passed
+    ipRequests.set(ip, { count: 1, timestamp: now });
+    return false;
+  }
+
+  if (requestData.count >= MAX_REQUESTS_PER_IP) {
+    return true;
+  }
+
+  // Increment counter
+  requestData.count++;
+  return false;
+}
+
+function validateInput(ingredients: string, steps: string): string | null {
+  if (!ingredients.trim() || !steps.trim()) {
+    return "Ingredients and steps are required.";
+  }
+
+  // Check combined length to estimate token count (rough estimate)
+  const combinedLength = ingredients.length + steps.length;
+  if (combinedLength > MAX_TOKENS) {
+    return "Input is too long. Please reduce the length of ingredients or steps.";
+  }
+
+  return null;
+}
+
 export async function POST(req: Request) {
   try {
+    // Get client IP
+    const headersList = await headers();
+    const forwardedFor = headersList.get("x-forwarded-for");
+    const ip = forwardedFor ? forwardedFor.split(",")[0] : "unknown";
+
+    // Check rate limit
+    if (isRateLimited(ip)) {
+      return NextResponse.json(
+        { error: "Rate limit exceeded. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     const { ingredients, steps, tone } = await req.json();
+
+    // Validate input
+    const validationError = validateInput(ingredients, steps);
+    if (validationError) {
+      return NextResponse.json({ error: validationError }, { status: 400 });
+    }
 
     const prompt = `Generate a recipe in JSON format based on these ingredients and steps.
 

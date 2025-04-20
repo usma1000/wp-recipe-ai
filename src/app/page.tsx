@@ -370,7 +370,6 @@ export default function RecipeForm() {
       steps: "",
       tone: "neutral",
     });
-    setRecipe(null);
     setError(null);
     localStorage.removeItem(STORAGE_KEY);
   }, [form]);
