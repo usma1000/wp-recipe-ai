@@ -34,6 +34,7 @@ import {
   Trash2,
   PanelLeftClose,
   PanelLeft,
+  Instagram,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -251,6 +252,10 @@ export default function RecipeForm() {
   const [controller, setController] = useState<AbortController | null>(null);
   const [copied, setCopied] = useState(false);
   const [showJsonDialog, setShowJsonDialog] = useState(false);
+  const [showInstagramDialog, setShowInstagramDialog] = useState(false);
+  const [copiedInstagram, setCopiedInstagram] = useState(false);
+  const [instagramPost, setInstagramPost] = useState<string>("");
+  const [isGeneratingPost, setIsGeneratingPost] = useState(false);
   const [recipeHistory, setRecipeHistory] = useState<SavedRecipe[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -390,6 +395,46 @@ export default function RecipeForm() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [recipe]);
+
+  const generateInstagramPost = useCallback(
+    async (recipe: Recipe) => {
+      setIsGeneratingPost(true);
+      try {
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ingredients: recipe.ingredients.join("\n"),
+            steps: recipe.instructions.join("\n"),
+            tone: form.getValues("tone"),
+            type: "instagram",
+          }),
+        });
+
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        setInstagramPost(data.post);
+      } catch (error) {
+        console.error("Failed to generate Instagram post:", error);
+        setError("Failed to generate Instagram post. Please try again.");
+      } finally {
+        setIsGeneratingPost(false);
+      }
+    },
+    [form]
+  );
+
+  const handleCopyInstagram = useCallback(async () => {
+    if (!instagramPost) return;
+    await navigator.clipboard.writeText(instagramPost);
+    setCopiedInstagram(true);
+    setTimeout(() => setCopiedInstagram(false), 2000);
+  }, [instagramPost]);
 
   const loadRecipe = useCallback(
     (savedRecipe: SavedRecipe) => {
@@ -740,57 +785,118 @@ export default function RecipeForm() {
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                   <CardTitle>Generated Recipe</CardTitle>
                   {recipe && !isLoading && (
-                    <Dialog
-                      open={showJsonDialog}
-                      onOpenChange={setShowJsonDialog}
-                    >
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Code2 className="h-4 w-4 mr-2" />
-                          Export JSON
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-3xl">
-                        <DialogHeader>
-                          <DialogTitle>WP Recipe Maker JSON</DialogTitle>
-                          <DialogDescription>
-                            Click the Copy button to copy the recipe. Then, in
-                            WP Recipe Maker, click the &ldquo;New Recipe&rdquo;
-                            button and paste this JSON into the &ldquo;Import
-                            from JSON&rdquo; field. You may have to scroll up to
-                            see it.
-                          </DialogDescription>
-                        </DialogHeader>
-                        <div className="relative mt-4 w-full overflow-y-auto">
-                          <div className="absolute right-4 top-4 z-10">
-                            <Button size="sm" onClick={handleCopyJson}>
-                              {copied ? (
-                                <>
-                                  <Check className="h-4 w-4 mr-2" />
-                                  Copied
-                                </>
-                              ) : (
-                                <>
-                                  <Copy className="h-4 w-4 mr-2" />
-                                  Copy
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                          <div className="rounded-lg border bg-muted max-h-[60vh] overflow-y-auto">
-                            <pre className="p-4 text-sm overflow-auto">
-                              <code className="block">
-                                {JSON.stringify(
-                                  [formatRecipeForWPRM(recipe)],
-                                  null,
-                                  2
+                    <div className="flex gap-2">
+                      <Dialog
+                        open={showJsonDialog}
+                        onOpenChange={setShowJsonDialog}
+                      >
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Code2 className="h-4 w-4 mr-2" />
+                            Export JSON
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-3xl">
+                          <DialogHeader>
+                            <DialogTitle>WP Recipe Maker JSON</DialogTitle>
+                            <DialogDescription>
+                              Click the Copy button to copy the recipe. Then, in
+                              WP Recipe Maker, click the &ldquo;New
+                              Recipe&rdquo; button and paste this JSON into the
+                              &ldquo;Import from JSON&rdquo; field. You may have
+                              to scroll up to see it.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="relative mt-4 w-full overflow-y-auto">
+                            <div className="absolute right-4 top-4 z-10">
+                              <Button size="sm" onClick={handleCopyJson}>
+                                {copied ? (
+                                  <>
+                                    <Check className="h-4 w-4 mr-2" />
+                                    Copied
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="h-4 w-4 mr-2" />
+                                    Copy
+                                  </>
                                 )}
-                              </code>
-                            </pre>
+                              </Button>
+                            </div>
+                            <div className="rounded-lg border bg-muted max-h-[60vh] overflow-y-auto">
+                              <pre className="p-4 text-sm overflow-auto">
+                                <code className="block">
+                                  {JSON.stringify(
+                                    [formatRecipeForWPRM(recipe)],
+                                    null,
+                                    2
+                                  )}
+                                </code>
+                              </pre>
+                            </div>
                           </div>
-                        </div>
-                      </DialogContent>
-                    </Dialog>
+                        </DialogContent>
+                      </Dialog>
+
+                      <Dialog
+                        open={showInstagramDialog}
+                        onOpenChange={(open) => {
+                          setShowInstagramDialog(open);
+                          if (open && recipe && !instagramPost) {
+                            generateInstagramPost(recipe);
+                          }
+                        }}
+                      >
+                        <DialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Instagram className="h-4 w-4 mr-2" />
+                            Share on Instagram
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-3xl">
+                          <DialogHeader>
+                            <DialogTitle>Instagram Post</DialogTitle>
+                            <DialogDescription>
+                              Copy this AI-generated post optimized for
+                              Instagram. It includes engaging copy and relevant
+                              hashtags for maximum reach.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="relative mt-4 w-full overflow-y-auto">
+                            <div className="absolute right-4 top-4 z-10">
+                              <Button
+                                size="sm"
+                                onClick={handleCopyInstagram}
+                                disabled={!instagramPost || isGeneratingPost}
+                              >
+                                {copiedInstagram ? (
+                                  <>
+                                    <Check className="h-4 w-4 mr-2" />
+                                    Copied
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy className="h-4 w-4 mr-2" />
+                                    Copy
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                            <div className="rounded-lg border bg-muted max-h-[60vh] overflow-y-auto">
+                              {isGeneratingPost ? (
+                                <div className="p-4">
+                                  <LoadingRecipe />
+                                </div>
+                              ) : (
+                                <pre className="p-4 text-sm overflow-auto whitespace-pre-wrap">
+                                  {instagramPost}
+                                </pre>
+                              )}
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
                   )}
                 </CardHeader>
                 <CardContent>

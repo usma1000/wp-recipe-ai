@@ -76,12 +76,43 @@ export async function POST(req: Request) {
       );
     }
 
-    const { ingredients, steps, tone } = await req.json();
+    const { ingredients, steps, tone, type } = await req.json();
 
     // Validate input
     const validationError = validateInput(ingredients, steps);
     if (validationError) {
       return NextResponse.json({ error: validationError }, { status: 400 });
+    }
+
+    if (type === "instagram") {
+      const prompt = `Create an engaging Instagram post for this recipe. The post should be optimized for engagement and include relevant food hashtags. Use emojis appropriately and make it visually appealing with proper spacing and formatting.
+
+Recipe Name: ${ingredients.split("\n")[0]}
+Ingredients:
+${ingredients}
+
+Steps:
+${steps}
+
+Use ${tone} tone for the post.
+
+The post should include:
+1. An eye-catching title with emojis
+2. A brief, engaging introduction
+3. Key recipe details (prep time, cook time, servings)
+4. A few key ingredients (not all, just the main ones)
+5. A brief summary of the cooking process
+6. A call-to-action to encourage engagement
+7. 15-20 relevant food and recipe hashtags
+
+Format the post with proper spacing and line breaks for Instagram.`;
+
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const result = await model.generateContent(prompt);
+      const response = result.response;
+      const text = response.text();
+
+      return NextResponse.json({ post: text });
     }
 
     const prompt = `Generate a recipe in JSON format based on these ingredients and steps.
