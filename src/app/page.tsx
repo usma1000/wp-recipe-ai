@@ -343,20 +343,52 @@ export default function RecipeForm() {
         return;
       }
 
-      // Create new saved recipe with ID and timestamp
-      const newSavedRecipe: SavedRecipe = {
-        ...data,
-        id: Date.now().toString(),
-        createdAt: new Date().toISOString(),
-      };
+      // Check if we're regenerating an existing recipe
+      const existingRecipe = recipeHistory.find(
+        (r) =>
+          r.ingredients.join("\n") === values.ingredients &&
+          r.instructions.join("\n") === values.steps
+      );
 
-      // Update history
-      const updatedHistory = [newSavedRecipe, ...recipeHistory];
-      setRecipeHistory(updatedHistory);
-      localStorage.setItem(RECIPE_HISTORY_KEY, JSON.stringify(updatedHistory));
+      if (existingRecipe) {
+        // Update existing recipe with new data
+        const updatedRecipe = {
+          ...data,
+          id: existingRecipe.id,
+          createdAt: existingRecipe.createdAt,
+        };
 
-      // Set as current recipe
-      setRecipe(newSavedRecipe);
+        // Update history
+        const updatedHistory = recipeHistory.map((r) =>
+          r.id === existingRecipe.id ? updatedRecipe : r
+        );
+        setRecipeHistory(updatedHistory);
+        localStorage.setItem(
+          RECIPE_HISTORY_KEY,
+          JSON.stringify(updatedHistory)
+        );
+
+        // Set as current recipe
+        setRecipe(updatedRecipe);
+      } else {
+        // Create new saved recipe with ID and timestamp
+        const newSavedRecipe: SavedRecipe = {
+          ...data,
+          id: Date.now().toString(),
+          createdAt: new Date().toISOString(),
+        };
+
+        // Update history
+        const updatedHistory = [newSavedRecipe, ...recipeHistory];
+        setRecipeHistory(updatedHistory);
+        localStorage.setItem(
+          RECIPE_HISTORY_KEY,
+          JSON.stringify(updatedHistory)
+        );
+
+        // Set as current recipe
+        setRecipe(newSavedRecipe);
+      }
     } catch (err) {
       if ((err as Error).name === "AbortError") {
         setError("Generation stopped");
