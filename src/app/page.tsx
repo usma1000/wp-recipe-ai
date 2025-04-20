@@ -376,6 +376,7 @@ export default function RecipeForm() {
       tone: "neutral",
     });
     setError(null);
+    setRecipe(null);
     localStorage.removeItem(STORAGE_KEY);
   }, [form]);
 
